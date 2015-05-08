@@ -214,8 +214,10 @@ The "output" instructions for sending a widget's data to another application or 
 */
 
 manager.prototype.transmit = function(data) {
+    debugger;
     this.makeOSC(this.emit, data);
     this.emit('*',data);
+
 } 
 
 /** 
@@ -389,6 +391,7 @@ var widget = module.exports = function (target) {
     newcanv.id = target;
     document.body.appendChild(newcanv)
   }
+  debugger;
   /**  @property {DOM element} canvas The widget's HTML5 canvas */
   this.canvas = document.getElementById(target);
   /**  @property {HTML5 drawing context} context The canvas's drawing context */
@@ -471,6 +474,7 @@ var widget = module.exports = function (target) {
     })
     ```  
     */
+    debugger;
     this.sendsTo = transmit.setWidgetTransmit;
     this.destination = "js";
   }

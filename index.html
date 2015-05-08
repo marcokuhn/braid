@@ -12,6 +12,7 @@
 	<script type="text/javascript" src="libraries/nexusUI.js"></script>
 	<script type="text/javascript" src="libraries/FileSaver.js"></script>
 	<script type="text/javascript" src="libraries/qrcode.min.js"></script>
+	<script type="text/javascript" src="libraries/modernizr.js"></script>
 
 	<link rel="manifest" href="manifest.json">
 
@@ -28,7 +29,80 @@
 		<meta name="apple-mobile-web-app-status-bar-style" content="black" />
 
 
+
 	<script>
+
+		//localFileStorage Javascript File API
+		/*navigator.webkitPersistentStorage.requestQuota(1024*1024, function() {
+ 			//window.webkitRequestFileSystem(window.PERSISTENT , 1024*1024, SaveDatFileBro);
+ 			// Note: The file system has been prefixed as of Google Chrome 12:
+			window.requestFileSystem  = window.requestFileSystem || window.webkitRequestFileSystem;
+			window.requestFileSystem(type, size, successCallback, opt_errorCallback)
+			console.log("gadggdgagd");
+
+		})*/ 
+
+		// Note: The file system has been prefixed as of Google Chrome 12:
+window.requestFileSystem  = window.requestFileSystem || window.webkitRequestFileSystem;
+
+//window.requestFileSystem(type, size, successCallback, opt_errorCallback);
+
+window.webkitStorageInfo.requestQuota(PERSISTENT, 1024*1024, function(grantedBytes) {
+  window.requestFileSystem(PERSISTENT, grantedBytes, onInitFs, errorHandler);
+}, function(e) {
+  console.log('Error-------------', e);
+});
+
+
+		
+
+		 function Route(api_path, canvasID){
+		 	this.api_path = api_path;
+		 	this.canvasID = canvasID;
+		 }
+
+		 var routeHandler = new Array();
+
+
+		 //var CurrentObjects
+
+		 var socket = new WebSocket("ws://localhost:4710" );
+		 socket.onopen = function() {
+		     console.log("SOCKET OPEN")
+		     //socket.send("subscribe /device/0/input/1/FaderLevelTapered");
+		 };
+
+		 socket.onmessage = function (evt) {
+		    //mod_
+		    var data = JSON.parse(evt.data);
+		    if(routeHandler.length > 0){
+		      for (var item in routeHandler){
+		      	var pathWithValue = routeHandler[item].api_path + "/value";
+		      	if( pathWithValue == data.path){
+					nx.widgets[routeHandler[item].canvasID].set({
+		                    "value": data.data
+		                })
+				}
+			  }	
+			}
+		 };
+
+		 socket.onclose = function() {
+		     console.log("SOCKET CLOSE")
+		 };
+
+		 socket.onerror = function() {
+		     console.log("SOCKET ERROR")
+		 };
+
+		 nx.onload = function() {
+		    
+		     nx.sendsTo("js");
+			 //  slider1.on('*', function(data) {
+		         // console.log(data);
+		     //    socket.send("set /device/0/input/0/FaderLevelTapered " + data.value);
+			 //  });
+		 };
 
 	 	window.AudioContext = window.AudioContext || window.webkitAudioContext;
 		var c = new window.AudioContext();
@@ -65,6 +139,9 @@
 				with (nx.widgets[key]) {
 					on('*', function(data) {
 						try {
+							//mod_
+							//this.canvasID;
+							socket.send("set " + this.oscName + " " + data.value);
 							audioFunction(data)
 						} catch(e) {
 							if (!nx.editmode) {
@@ -382,6 +459,24 @@
 		}
 
 		function setoscname(val) {
+			//mod_ 
+			//check if value exist:
+			var valueExist = 0;
+			console.log("setoscname");
+			
+			//check if Route already in routeHandler 
+			for(var item in routeHandler){
+				if(routeHandler[item].api_path == val){
+					valueExist = 1;
+					break;
+				}				
+			}
+			if (valueExist == 0){
+				routeHandler.push(new Route(val, nx.widgets[globaldragid].canvasID));
+				console.log("--------subscribe------>>>>>>" + routeHandler[routeHandler.length - 1].api_path)
+				socket.send("subscribe " + val );
+			}
+						
 			nx.widgets[globaldragid].oscName = val;
 			nx.widgets[globaldragid].draw();
 		}
@@ -398,6 +493,7 @@
 		}
 		
 		function saveUI() {
+			console.log("SAVE UI");
 
 		 	var html = '<!doctype html>\n'
 	    	+ '<html>   \n'
@@ -412,8 +508,9 @@
 			+ '<script>\n'
 			+ 'nx.onload = function() {\n'
 			+ '	nx.colorize("'+uicolor+'");\n'
-			+ '	nx.sendsTo("ajax");\n'
-			+ '	nx.usesScript("nexusOSCRelay.php");\n'
+			+ '	nx.sendsTo("js");\n'
+			//+ '	nx.sendsTo("ajax");\n'
+			//+ '	nx.usesScript("nexusOSCRelay.php");\n'
 			+ '}\n'
 			+ '<\/script>\n';
 
@@ -430,6 +527,7 @@
 
 			var blob = new Blob([html], {type: "text/html;charset=utf-8"});
 			saveAs(blob, "nexusdrop.html");
+			
 			
 		}
 
@@ -607,6 +705,34 @@
 
 		/**** COMMUNICATE WITH DB ****/
 
+		function onInitFs(fs) {
+
+		  	fs.root.getFile('log.txt', {create: true}, function(fileEntry) {
+
+		    // Create a FileWriter object for our FileEntry (log.txt).
+		    fileEntry.createWriter(function(fileWriter) {
+
+		      fileWriter.onwriteend = function(e) {
+		        console.log('Write completed.');
+		      };
+
+		      fileWriter.onerror = function(e) {
+		        console.log('Write failed: ' + e.toString());
+		      };
+
+		      // Create a new Blob and write it to log.txt.
+		      var bb = new BlobBuilder(); // Note: window.WebKitBlobBuilder in Chrome 12.
+		      bb.append('Lorem Ipsum');
+		      fileWriter.write(bb.getBlob('text/plain'));
+
+		    }, errorHandler);
+
+		  }, errorHandler);
+
+		}
+
+
+
 
 		function askToSaveToDB() {
 			var uiname = prompt("Please name your interface", pageName);
@@ -641,6 +767,72 @@
 			
 		}
 
+
+		//FileSystemError Handler
+		function errorHandler(e) {
+		  var msg = '';
+
+		  switch (e.code) {
+		    case FileError.QUOTA_EXCEEDED_ERR:
+		      msg = 'QUOTA_EXCEEDED_ERR';
+		      break;
+		    case FileError.NOT_FOUND_ERR:
+		      msg = 'NOT_FOUND_ERR';
+		      break;
+		    case FileError.SECURITY_ERR:
+		      msg = 'SECURITY_ERR';
+		      break;
+		    case FileError.INVALID_MODIFICATION_ERR:
+		      msg = 'INVALID_MODIFICATION_ERR';
+		      break;
+		    case FileError.INVALID_STATE_ERR:
+		      msg = 'INVALID_STATE_ERR';
+		      break;
+		    default:
+		      msg = 'Unknown Error';
+		      break;
+		  };
+
+		  console.log('Error: ' + msg);
+		}
+
+		//SaveDatFileBro() is now permitted access to the allocated storage and able to create files 
+		function SaveDatFileBro(localstorage, data) {
+ 			localstorage.root.getFile("info.txt", {create: true}, function(DatFile) {
+    		DatFile.createWriter(function(DatContent) {
+      			var blob = new Blob(["Lorem Ipsum"], {type: "text/plain"});
+      			DatContent.write(blob);
+    			});
+  			});
+ 		}
+
+  		function onInitFs(fs) {
+
+		  fs.root.getFile('log.txt', {create: true}, function(fileEntry) {
+
+		    // Create a FileWriter object for our FileEntry (log.txt).
+		    fileEntry.createWriter(function(fileWriter) {
+
+		      fileWriter.onwriteend = function(e) {
+		        console.log('Write completed.');
+		      };
+
+		      fileWriter.onerror = function(e) {
+		        console.log('Write failed: ' + e.toString());
+		      };
+
+		      // Create a new Blob and write it to log.txt.
+		      var bb = new BlobBuilder(); // Note: window.WebKitBlobBuilder in Chrome 12.
+		      bb.append('Lorem Ipsum');
+		      fileWriter.write(bb.getBlob('text/plain'));
+
+		    }, errorHandler);
+
+		  }, errorHandler);
+		}
+
+
+
 		function saveToDB(name) {
 			
 			setPageName(name);
@@ -654,11 +846,33 @@
 					"uiJSON": makeUIjson()
 				}
 			}
-			
+
 			mydata = JSON.stringify(mydata);
+			window.requestFileSystem(window.TEMPORARY, 1024*1024, onInitFs, errorHandler);
 
-			hideSearchbar()
+			console.log("----------------save");
+			console.log(mydata);
+			//window.requestFileSystem(window.TEMPORARY, 1024*1024, onInitFs, errorHandler);
 
+			if (Modernizr.localstorage) {
+				// window.localStorage is available!
+				alert("local.storage supported");
+				var save_Key = 'uad_braid_'+ name;
+				console.log("--> key ->: "+ save_Key);
+				localStorage.setItem(save_Key, mydata);
+
+			} else {
+			  // no native support for HTML5 storage :(
+			  // maybe try dojox.storage or a third-party solution
+			  alert("local.storage NOT supported");
+			}
+
+
+			
+			//hideSearchbar();
+
+			//mod_
+			/*
 			jQuery.ajax({
 			    type: "POST",
 			    url: "http://nexus.cct.lsu.edu:8000/nexus_uis",
@@ -673,8 +887,7 @@
 			        console.log(errorMsg);
 			    }
 			}); 
-
-
+			*/
 		}
 
 
@@ -721,6 +934,27 @@
 			UItoLoad = name;
 			setPageName(name);
 
+			//save Datat to local.storage
+			var loadData = "uad_braid_" + name;
+			console.log("loadDB----------->"+loadData);
+			// local.storage
+			var data = localStorage.getItem(loadData);
+
+			console.log(data);
+			
+			for (var i=0;i<data.length;i++) {
+		        if (data[i].name) {
+			    	if (data[i].name.toLowerCase() == pageName.toLowerCase()) {
+			    		buildUIfromJSON(data[i].uiJSON);
+		           		currentUI = data[i];
+						clearGlobalAudio();
+		           		return;
+			        }
+				}
+		    }
+
+		    /*
+
 			loadDB(function (data) {
 				setUIDB(data)
 	        	for (var i=0;i<data.length;i++) {
@@ -737,12 +971,29 @@
 	        	}
 	        	alert("Could not find the UI: "+UItoLoad);
 		    })
+			*/
 		}
 
 		var UIDB;
 
 		function loadDB(callback) {
 
+			/*
+			var loadData = "uad_braid_" + data.name;
+			console.log("loadDB----------->"+loadData);
+			// local.storage
+			var data = localstorage.getItem(loadData);
+			for (var i=0;i<data.length;i++) {
+		        if (data[i].name) {
+			    	if (data[i].name.toLowerCase() == pageName.toLowerCase()) {
+			    		currentUI = data[i];
+			        	return;
+			        }
+				}
+		    }
+			*/
+
+		
 			$.ajax({
 				type: "GET",
 			    url: "http://nexus.cct.lsu.edu:8000/nexus_uis.json",
@@ -764,6 +1015,7 @@
 		        	console.log(err)
 		        }
 			})
+			
 
 		}
 
