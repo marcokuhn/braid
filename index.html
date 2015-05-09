@@ -32,47 +32,35 @@
 
 	<script>
 
-		//localFileStorage Javascript File API
-		/*navigator.webkitPersistentStorage.requestQuota(1024*1024, function() {
- 			//window.webkitRequestFileSystem(window.PERSISTENT , 1024*1024, SaveDatFileBro);
- 			// Note: The file system has been prefixed as of Google Chrome 12:
-			window.requestFileSystem  = window.requestFileSystem || window.webkitRequestFileSystem;
-			window.requestFileSystem(type, size, successCallback, opt_errorCallback)
-			console.log("gadggdgagd");
+	/*
+	GENERAL:
+	- FileSystem API doens´t work with file:/// - Use a Webserver instead
 
-		})*/ 
+	- websockets use subcriber 
+	//socket.send("subscribe /device/0/input/1/FaderLevelTapered");
+	*/
 
 		// Note: The file system has been prefixed as of Google Chrome 12:
-window.requestFileSystem  = window.requestFileSystem || window.webkitRequestFileSystem;
+		window.requestFileSystem  = window.requestFileSystem || window.webkitRequestFileSystem;
+		window.webkitStorageInfo.requestQuota(PERSISTENT, 1024*1024, function(grantedBytes) {
+			window.requestFileSystem(PERSISTENT, grantedBytes, onInitFs, errorHandler);
+		}, function(e) {
+	  		console.log('Error-------------', e);
+		});
 
-//window.requestFileSystem(type, size, successCallback, opt_errorCallback);
-
-window.webkitStorageInfo.requestQuota(PERSISTENT, 1024*1024, function(grantedBytes) {
-  window.requestFileSystem(PERSISTENT, grantedBytes, onInitFs, errorHandler);
-}, function(e) {
-  console.log('Error-------------', e);
-});
-
-
-		
-
-		 function Route(api_path, canvasID){
-		 	this.api_path = api_path;
+		function Route(api_path, canvasID){
+			this.api_path = api_path;
 		 	this.canvasID = canvasID;
-		 }
+		}
 
-		 var routeHandler = new Array();
+		var routeHandler = new Array();
 
+		var socket = new WebSocket("ws://localhost:4710" );
+		socket.onopen = function() {
+			    console.log("SOCKET OPEN")
+		};
 
-		 //var CurrentObjects
-
-		 var socket = new WebSocket("ws://localhost:4710" );
-		 socket.onopen = function() {
-		     console.log("SOCKET OPEN")
-		     //socket.send("subscribe /device/0/input/1/FaderLevelTapered");
-		 };
-
-		 socket.onmessage = function (evt) {
+		socket.onmessage = function (evt) {
 		    //mod_
 		    var data = JSON.parse(evt.data);
 		    if(routeHandler.length > 0){
@@ -85,24 +73,30 @@ window.webkitStorageInfo.requestQuota(PERSISTENT, 1024*1024, function(grantedByt
 				}
 			  }	
 			}
-		 };
+		};
 
-		 socket.onclose = function() {
-		     console.log("SOCKET CLOSE")
-		 };
+		socket.onclose = function() {
+		    console.log("SOCKET CLOSE")
+		};
 
-		 socket.onerror = function() {
-		     console.log("SOCKET ERROR")
-		 };
+		socket.onerror = function() {
+		    console.log("SOCKET ERROR")
+		};
 
-		 nx.onload = function() {
+		nx.onload = function() {
 		    
-		     nx.sendsTo("js");
+		    nx.sendsTo("js");
 			 //  slider1.on('*', function(data) {
 		         // console.log(data);
 		     //    socket.send("set /device/0/input/0/FaderLevelTapered " + data.value);
 			 //  });
-		 };
+		};
+
+		function initializeWebsocketConn(){
+
+
+		}
+
 
 	 	window.AudioContext = window.AudioContext || window.webkitAudioContext;
 		var c = new window.AudioContext();
@@ -142,10 +136,11 @@ window.webkitStorageInfo.requestQuota(PERSISTENT, 1024*1024, function(grantedByt
 							//mod_
 							//this.canvasID;
 							socket.send("set " + this.oscName + " " + data.value);
+							
 							audioFunction(data)
 						} catch(e) {
 							if (!nx.editmode) {
-								console.log(e);
+								//console.log(e);
 								$("#errorbox").html(canvasID+": "+e.message+"    &nbsp;&nbsp; <img src='images/close-icon2.png'>")
 								$("#errorbox").css("padding","8px 30px 8px 8px")
 							}
@@ -269,7 +264,7 @@ window.webkitStorageInfo.requestQuota(PERSISTENT, 1024*1024, function(grantedByt
 
 
 				$(document).keydown(function(e){
-					console.log(e.keyCode);
+					//console.log(e.keyCode);
 					keysdown[e.keyCode] = true
 					if (e.keyCode == 69 && keysdown[91]) {
 						if (nx.editmode) {
@@ -595,8 +590,6 @@ window.webkitStorageInfo.requestQuota(PERSISTENT, 1024*1024, function(grantedByt
 			return JSON.stringify(jsonui);
 		}
 
-
-
 		function recallUILocally(uiname) {
 		//	if (JSON.parse(uijson)localStorage[uiname]) {
 		//		console.log(localStorage[uiname])
@@ -677,6 +670,9 @@ window.webkitStorageInfo.requestQuota(PERSISTENT, 1024*1024, function(grantedByt
 				updateGlobalAudio();
 				loadInPerformance = false;
 			}
+
+			console.log("BUILD FROM JSON ---> buildUIfromJSON");
+			initializeWebsocketConn();
 		}
 
 		function renderSettings(settings) {
@@ -702,71 +698,7 @@ window.webkitStorageInfo.requestQuota(PERSISTENT, 1024*1024, function(grantedByt
 
 
 
-
 		/**** COMMUNICATE WITH DB ****/
-
-		function onInitFs(fs) {
-
-		  	fs.root.getFile('log.txt', {create: true}, function(fileEntry) {
-
-		    // Create a FileWriter object for our FileEntry (log.txt).
-		    fileEntry.createWriter(function(fileWriter) {
-
-		      fileWriter.onwriteend = function(e) {
-		        console.log('Write completed.');
-		      };
-
-		      fileWriter.onerror = function(e) {
-		        console.log('Write failed: ' + e.toString());
-		      };
-
-		      // Create a new Blob and write it to log.txt.
-		      var bb = new BlobBuilder(); // Note: window.WebKitBlobBuilder in Chrome 12.
-		      bb.append('Lorem Ipsum');
-		      fileWriter.write(bb.getBlob('text/plain'));
-
-		    }, errorHandler);
-
-		  }, errorHandler);
-
-		}
-
-
-
-
-		function askToSaveToDB() {
-			var uiname = prompt("Please name your interface", pageName);
-			var overwriting = false;
-			if (uiname) {
-
-				for (var i=0;i<UIDB.length;i++) {
-	        		if (UIDB[i].name) {
-		        		if (UIDB[i].name.toLowerCase() == uiname.toLowerCase()) {
-		           			currentUI = UIDB[i];
-		           			overwriting = true;
-		           			break;
-		           		}
-		           	}
-	        	}
-
-	        	if (overwriting) {
-
-					var confirmoverwrite = confirm("Are you sure you want to overwrite the interface:" + currentUI.name);
-
-		        	if (!confirmoverwrite) { return }
-
-					updateToDB(uiname)
-
-				} else {
-
-					saveToDB(uiname);
-
-	        	}
-	        	
-			}
-			
-		}
-
 
 		//FileSystemError Handler
 		function errorHandler(e) {
@@ -796,27 +728,17 @@ window.webkitStorageInfo.requestQuota(PERSISTENT, 1024*1024, function(grantedByt
 		  console.log('Error: ' + msg);
 		}
 
-		//SaveDatFileBro() is now permitted access to the allocated storage and able to create files 
-		function SaveDatFileBro(localstorage, data) {
- 			localstorage.root.getFile("info.txt", {create: true}, function(DatFile) {
-    		DatFile.createWriter(function(DatContent) {
-      			var blob = new Blob(["Lorem Ipsum"], {type: "text/plain"});
-      			DatContent.write(blob);
-    			});
-  			});
- 		}
 
-  		function onInitFs(fs) {
+		//FileSystem API - Write file to Disk
+		function onInitFs(fs) {
 
-		  fs.root.getFile('log.txt', {create: true}, function(fileEntry) {
-
+		  	fs.root.getFile('log.txt', {create: true}, function(fileEntry) {
 		    // Create a FileWriter object for our FileEntry (log.txt).
 		    fileEntry.createWriter(function(fileWriter) {
 
 		      fileWriter.onwriteend = function(e) {
 		        console.log('Write completed.');
 		      };
-
 		      fileWriter.onerror = function(e) {
 		        console.log('Write failed: ' + e.toString());
 		      };
@@ -829,15 +751,43 @@ window.webkitStorageInfo.requestQuota(PERSISTENT, 1024*1024, function(grantedByt
 		    }, errorHandler);
 
 		  }, errorHandler);
+
 		}
 
+		function askToSaveToDB() {
+			var uiname = prompt("Please name your interface", pageName);
+			var overwriting = false;
+			if (uiname) {
+
+				for (var i=0;i<UIDB.length;i++) {
+	        		if (UIDB[i].name) {
+		        		if (UIDB[i].name.toLowerCase() == uiname.toLowerCase()) {
+		           			currentUI = UIDB[i];
+		           			overwriting = true;
+		           			break;
+		           		}
+		           	}
+	        	}
+
+	        	if (overwriting) {
+
+					var confirmoverwrite = confirm("Are you sure you want to overwrite the interface:" + currentUI.name);
+
+		        	if (!confirmoverwrite) { return }
+
+					updateToDB(uiname)
+
+				} else {
+
+					saveToDB(uiname);
+	        	}  	
+			}
+		}
 
 
 		function saveToDB(name) {
 			
 			setPageName(name);
-
-		//	clearSearchbar();
 
 			var mydata = {
 				"nexus_ui": {
@@ -848,15 +798,12 @@ window.webkitStorageInfo.requestQuota(PERSISTENT, 1024*1024, function(grantedByt
 			}
 
 			mydata = JSON.stringify(mydata);
-			window.requestFileSystem(window.TEMPORARY, 1024*1024, onInitFs, errorHandler);
-
-			console.log("----------------save");
-			console.log(mydata);
 			//window.requestFileSystem(window.TEMPORARY, 1024*1024, onInitFs, errorHandler);
 
+			//Save Data to local Storage
 			if (Modernizr.localstorage) {
 				// window.localStorage is available!
-				alert("local.storage supported");
+				console.log("save on local.storage");
 				var save_Key = 'uad_braid_'+ name;
 				console.log("--> key ->: "+ save_Key);
 				localStorage.setItem(save_Key, mydata);
@@ -867,6 +814,9 @@ window.webkitStorageInfo.requestQuota(PERSISTENT, 1024*1024, function(grantedByt
 			  alert("local.storage NOT supported");
 			}
 
+			console.log("----------------save");
+			console.log(mydata);
+			
 
 			
 			//hideSearchbar();
@@ -907,6 +857,24 @@ window.webkitStorageInfo.requestQuota(PERSISTENT, 1024*1024, function(grantedByt
 
 			hideSearchbar()
 
+			//Update Data to local Storage
+			if (Modernizr.localstorage) {
+				// window.localStorage is available!
+				console.log("save on local.storage");
+				var save_Key = 'uad_braid_'+ name;
+				console.log("--> key ->: "+ save_Key);
+				localStorage.setItem(save_Key, mydata);
+
+			} else {
+			  // no native support for HTML5 storage :(
+			  // maybe try dojox.storage or a third-party solution
+			  alert("local.storage NOT supported");
+			}
+
+			console.log("----------------save");
+			console.log(mydata);
+
+			/*
 			jQuery.ajax({
 			    type: "PUT",
 			    url: currentUI.url,
@@ -921,11 +889,8 @@ window.webkitStorageInfo.requestQuota(PERSISTENT, 1024*1024, function(grantedByt
 			        console.log(errorMsg);
 			    }
 			}); 
-
-
+			*/
 		}
-
-
 
 		var UItoLoad;
 
@@ -934,9 +899,9 @@ window.webkitStorageInfo.requestQuota(PERSISTENT, 1024*1024, function(grantedByt
 			UItoLoad = name;
 			setPageName(name);
 
-			//save Datat to local.storage
+			//save Data to local.storage
 			var loadData = "uad_braid_" + name;
-			console.log("loadDB----------->"+loadData);
+			console.log("searchDB() - loadDATA-----------> " + loadData);
 			// local.storage
 			var data = localStorage.getItem(loadData);
 
@@ -978,11 +943,13 @@ window.webkitStorageInfo.requestQuota(PERSISTENT, 1024*1024, function(grantedByt
 
 		function loadDB(callback) {
 
-			/*
-			var loadData = "uad_braid_" + data.name;
-			console.log("loadDB----------->"+loadData);
-			// local.storage
-			var data = localstorage.getItem(loadData);
+			//
+			//var loadData = "uad_braid_" + data.name;
+			//console.log("loadDB----------->"+loadData);
+			
+			// load default SET
+			var data = {"nexus_ui":{"name":"sliderTest","transmission":"test","uiJSON":"{\"globalAudio\":\"\\n// Welcome to Nexus's web audio environment!\\n// AudioContext is initialized as variable c \\n\\n\",\"elements\":[{\"type\":\"slider\",\"canvasID\":\"slider1\",\"oscName\":\"/device/0/input/1/FaderLevelTapered\",\"width\":30,\"height\":100,\"top\":175,\"left\":610,\"audioString\":\"\",\"settings\":\"\"}],\"settings\":{\"colors\":{\"accent\":\"#0af\",\"fill\":\"#eee\",\"border\":\"#bbb\",\"black\":\"#000\",\"white\":\"#FFF\",\"background\":\"#DDDDDD\"},\"votes\":0,\"timestamp\":\"2015-05-08T11:04:30.913Z\"}}"}}
+
 			for (var i=0;i<data.length;i++) {
 		        if (data[i].name) {
 			    	if (data[i].name.toLowerCase() == pageName.toLowerCase()) {
@@ -991,9 +958,10 @@ window.webkitStorageInfo.requestQuota(PERSISTENT, 1024*1024, function(grantedByt
 			        }
 				}
 		    }
-			*/
+			
 
-		
+			//load default det from server
+			/*	
 			$.ajax({
 				type: "GET",
 			    url: "http://nexus.cct.lsu.edu:8000/nexus_uis.json",
@@ -1015,6 +983,7 @@ window.webkitStorageInfo.requestQuota(PERSISTENT, 1024*1024, function(grantedByt
 		        	console.log(err)
 		        }
 			})
+			*/
 			
 
 		}
